@@ -1,6 +1,7 @@
 import parserTypeScript from 'prettier/parser-typescript';
 import { format } from 'prettier/standalone';
 
+import { checkIsEvent } from '@/helpers/event-handlers';
 import { SELF_CLOSING_HTML_TAGS } from '../../constants/html_tags';
 import { convertExportDefaultToReturn } from '../../parsers/builder';
 import { stableJSONserialize } from './helpers/stable-serialize';
@@ -326,13 +327,7 @@ export class SrcBuilder {
         let key = lastProperty(rawKey);
         if (isEvent(key)) {
           key = key + '$';
-          if (this.file.options.isJSX) {
-            binding = `(event)=>${binding}`;
-          } else {
-            binding = `${
-              this.file.import(this.file.qwikModule, '$').localName
-            }((event)=>${binding})`;
-          }
+          binding = `${this.file.import(this.file.qwikModule, '$').localName}((event)=>${binding})`;
         } else if (!binding && rawKey in props) {
           binding = quote(props[rawKey]);
         } else if (binding != null && binding === props[key]) {
@@ -365,6 +360,10 @@ export class SrcBuilder {
         if (key === 'innerHTML') key = 'dangerouslySetInnerHTML';
         if (key === 'dataSet') return; // ignore
         if (self.isJSX) {
+          if (key.includes(':') && value === '""') {
+            self.emit(' ', key);
+            return;
+          }
           self.emit(' ', key, '=');
           if (typeof value == 'string' && value.startsWith('"') && value.endsWith('"')) {
             self.emit(value);
@@ -426,7 +425,7 @@ export class SrcBuilder {
 }
 
 function isEvent(name: string): boolean {
-  return name.startsWith('on') && isUppercase(name.charAt(2)) && !name.endsWith('$');
+  return checkIsEvent(name) && isUppercase(name.charAt(2)) && !name.endsWith('$');
 }
 
 function isUppercase(ch: string): boolean {
